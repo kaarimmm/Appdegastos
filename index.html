@@ -106,11 +106,11 @@ function campos(d){const ci=!!(d&&d.recibido);
  return '<label class="chk"><input type="checkbox" name="int"'+(ci?' checked':'')+'> Tiene interés</label><div class="si"'+(ci?'':' hidden')+'>'+fld('Lo que recibiste','recibido',d&&d.recibido,'decimal')+'</div>'+
         fld('Total a pagar ($)','total',d&&d.total,'decimal')+
         '<div class="grid2">'+fld('Cantidad cuotas','cuotas',d&&d.cuotas,'numeric')+fld('Pagadas','pagadas',d?d.pagadas:0,'numeric')+'</div>'+
-        fld('Día de vencimiento (ej. 10)','diaVencimiento',d&&d.diaVencimiento||10,'numeric')}
+        fld('📅 Día de vencimiento (1 al 31)','diaVencimiento',d&&d.diaVencimiento||10,'numeric')}
 function fDeuda(d,cid){
  return '<a class="back" href="'+(d?'#/d/'+d.id:'#/c/'+cid)+'">‹ Cancelar</a><h1>'+(d?'Editar deuda':'Nueva deuda')+'</h1><form data-f="deuda" data-id="'+(d?d.id:'')+'" data-cid="'+(cid||'')+'">'+fld('Qué es (ej. Heladera)','desc',d&&d.desc)+campos(d)+'<button class="btn">Guardar</button></form>'}
 function fCuenta(){
- return '<a class="back" href="#/">‹ Cancelar</a><h1>Nueva cuenta</h1><form data-f="cuenta">'+fld('Nombre (ej. Naranja)','nombre','')+fld('Día de vencimiento general (ej. 10)','diaVencimiento','10','numeric')+
+ return '<a class="back" href="#/">‹ Cancelar</a><h1>Nueva cuenta</h1><form data-f="cuenta">'+fld('Nombre (ej. Naranja)','nombre','')+fld('📅 Día de vencimiento general (1 al 31)','diaVencimiento','10','numeric')+
         '<label>Tipo<select name="tipo"><option value="tarjeta">Tarjeta de crédito</option><option value="prestamo">Préstamo</option><option value="otro">Otra deuda</option></select></label>'+
         '<div class="solo" hidden>'+campos(null)+'</div><button class="btn">Guardar</button></form>'}
 
@@ -125,9 +125,14 @@ function render(keep){
  $.innerHTML=h;if(keep!==true)window.scrollTo(0,0)}
 
 document.addEventListener('submit',e=>{e.preventDefault();const f=e.target,v=Object.fromEntries(new FormData(f)),k=f.dataset.f;
- const nn=s=>parseFloat(String(s||'').replace(/\./g,'').replace(',','.'));
- const leer=()=>{const total=nn(v.total),cuotas=parseInt(v.cuotas,10),pagadas=parseInt(v.pagadas||0,10),dia=parseInt(v.diaVencimiento,10)||10,rec=v.int?nn(v.recibido):null;
-  if(!(total>0)||!(cuotas>=1)||cuotas>120||!(pagadas>=0)||pagadas>cuotas||(v.int&&!(rec>0))){alert('Revisá los números: monto, cuotas (máx 120) y pagadas.');return null}
+ const nn=s=>{if(!s)return 0;let c=String(s).trim().replace(/\./g,'').replace(',','.');return parseFloat(c)||0;};
+ const leer=()=>{
+  const total=nn(v.total), cuotas=parseInt(v.cuotas,10), pagadas=parseInt(v.pagadas||0,10), dia=parseInt(v.diaVencimiento,10)||10, rec=v.int?nn(v.recibido):null;
+  if(!(total>0)){alert('Revisá el monto total.');return null}
+  if(!(cuotas>=1&&cuotas<=120)){alert('La cantidad de cuotas debe ser entre 1 y 120.');return null}
+  if(!(pagadas>=0&&pagadas<=cuotas)){alert('Las cuotas pagadas no pueden superar al total de cuotas.');return null}
+  if(!(dia>=1&&dia<=31)){alert('El día de vencimiento debe estar entre 1 y 31.');return null}
+  if(v.int&&!(rec>0)){alert('Revisá el monto recibido.');return null}
   return{total,cuotas,pagadas,diaVencimiento:dia,recibido:rec}};
  if(k==='cuenta'){const n=(v.nombre||'').trim();if(!n){alert('Poné un nombre.');return}const diaV=parseInt(v.diaVencimiento,10)||10;
   let d=null;if(v.tipo!=='tarjeta'){d=leer();if(!d)return}
