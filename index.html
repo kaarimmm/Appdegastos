@@ -19,9 +19,7 @@ main{max-width:560px;margin:0 auto;padding:12px 16px 110px}
 h1{font:600 26px/1.2 ui-serif,Georgia,serif;margin:4px 0 12px}
 h2{font-size:16px;color:var(--mute);font-weight:600;margin:26px 0 8px}
 .back{display:inline-block;color:var(--ok);text-decoration:none;padding:10px 0}
-.lbl{margin:14px 0 0;color:var(--mute);font-size:15px}
-.big{margin:0 0 6px;font:600 44px/1.1 ui-serif,Georgia,serif;letter-spacing:-.02em}
-.sub{margin:8px 0 16px;color:var(--mute)}
+.lbl{margin:0;font-size:13px;color:var(--mute)}
 .empty{color:var(--mute);margin:28px 0}
 .list{background:var(--card);border-radius:14px;overflow:hidden;margin-top:12px}
 .list.pad{padding:4px 16px}
@@ -51,6 +49,18 @@ input,select{display:block;width:100%;box-sizing:border-box;margin-top:6px;paddi
 .chk input{width:auto;margin:0}
 form .btn{width:100%;margin-top:22px}
 :focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+
+/* Nuevos estilos Dashboard & Cards */
+.dashboard-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 16px}
+.card-dash{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left}
+.card-dash.primary{border-color:var(--ok)}
+.big-dash{margin:4px 0 0;font:600 22px/1.1 ui-serif,Georgia,serif;letter-spacing:-.02em}
+.cards-container{display:grid;gap:12px;margin-top:12px}
+.account-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:block;color:inherit;text-decoration:none;transition:border-color .2s}
+.account-card:hover{border-color:var(--ok)}
+.account-amounts{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 6px;padding-top:10px;border-top:1px solid var(--line)}
+.badge-venc{font-size:12px;background:var(--bg);padding:3px 8px;border-radius:6px;color:var(--mute);font-weight:600}
+.account-count{color:var(--mute);font-size:13px}
 </style></head>
 <body><main id="app"></main>
 <script>
@@ -62,42 +72,104 @@ const $=document.getElementById('app');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const fmt=n=>'$ '+Math.round(n).toLocaleString('es-AR');
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const cuota=d=>d.total/d.cuotas, resta=d=>(d.cuotas-d.pagadas)*cuota(d), sum=a=>a.reduce((s,d)=>s+resta(d),0);
+
+const cuota=d=>d.total/d.cuotas;
+const resta=d=>(d.cuotas-d.pagadas)*cuota(d);
+const sum=a=>a.reduce((s,d)=>s+resta(d),0);
+
+// Cálculo de lo que vence este mes (cada deuda activa aporta exactamente 1 cuota)
+const cuotaMes=d=>d.pagadas<d.cuotas?cuota(d):0;
+const sumaMes=a=>a.reduce((s,d)=>s+cuotaMes(d),0);
+
 const TIPOS={tarjeta:'Tarjetas',prestamo:'Préstamos',otro:'Otras deudas'};
 const ticks=d=>'<div class="ticks" aria-hidden="true">'+Array.from({length:d.cuotas},(_,i)=>'<i class="'+(i<d.pagadas?'on':'')+'"></i>').join('')+'</div>';
 
 function vHome(){
- let h='<p class="lbl">Debés en total</p><p class="big">'+fmt(sum(db.deudas))+'</p>';
+ const totalMes=sumaMes(db.deudas);
+ const totalAcum=sum(db.deudas);
+ let h=`
+  <div class="dashboard-grid">
+   <div class="card-dash primary">
+    <p class="lbl">Este mes pagás</p>
+    <p class="big-dash">${fmt(totalMes)}</p>
+   </div>
+   <div class="card-dash">
+    <p class="lbl">Total acumulado</p>
+    <p class="big-dash">${fmt(totalAcum)}</p>
+   </div>
+  </div>
+ `;
  if(!db.cuentas.length)h+='<p class="empty">Todavía no cargaste nada. Tocá «Nueva cuenta» para empezar.</p>';
- for(const t in TIPOS){const cs=db.cuentas.filter(c=>c.tipo===t);if(!cs.length)continue;
-  h+='<h2>'+TIPOS[t]+'</h2><div class="list">'+cs.map(c=>{const ds=db.deudas.filter(d=>d.cuentaId===c.id);
-   return '<a class="item" href="#/c/'+c.id+'"><span><b>'+esc(c.nombre)+'</b><small>'+ds.length+(ds.length===1?' deuda':' deudas')+'</small></span><span class="amt">'+fmt(sum(ds))+'</span></a>'}).join('')+'</div>'}
+ for(const t in TIPOS){
+  const cs=db.cuentas.filter(c=>c.tipo===t);if(!cs.length)continue;
+  h+='<h2>'+TIPOS[t]+'</h2><div class="cards-container">';
+  h+=cs.map(c=>{
+   const ds=db.deudas.filter(d=>d.cuentaId===c.id);
+   const mesC=ds.reduce((s,d)=>s+cuotaMes(d),0);
+   const totC=sum(ds);
+   const diaV=c.diaVencimiento||10;
+   return `
+    <a class="account-card" href="#/c/${c.id}">
+     <div class="between">
+      <b>${esc(c.nombre)}</b>
+      <span class="badge-venc">Vence el ${diaV}</span>
+     </div>
+     <div class="account-amounts">
+      <div><small style="color:var(--mute);font-size:12px">Este mes</small><div style="font-weight:700;font-size:17px">${fmt(mesC)}</div></div>
+      <div style="text-align:right"><small style="color:var(--mute);font-size:12px">Total</small><div class="amt">${fmt(totC)}</div></div>
+     </div>
+     <small class="account-count">${ds.length} ${ds.length===1?'compra / deuda':'compras / deudas'}</small>
+    </a>
+   `;
+  }).join('')+'</div>';
+ }
  if(db.cuentas.length)h+='<p class="foot"><button class="link" data-act="exportar">Guardar respaldo</button><button class="link" data-act="importar">Restaurar respaldo</button></p>';
- return h+'<a class="btn fab" href="#/nueva">Nueva cuenta</a>'}
+ return h+'<a class="btn fab" href="#/nueva">Nueva cuenta</a>';
+}
 
-function vCuenta(id){const c=db.cuentas.find(x=>x.id===id);if(!c)return vHome();const ds=db.deudas.filter(d=>d.cuentaId===id);
- let h='<a class="back" href="#/">‹ Inicio</a><h1>'+esc(c.nombre)+'</h1><p class="lbl">Debés en esta cuenta</p><p class="big">'+fmt(sum(ds))+'</p>';
+function vCuenta(id){
+ const c=db.cuentas.find(x=>x.id===id);if(!c)return vHome();
+ const ds=db.deudas.filter(d=>d.cuentaId===id);
+ const mesC=ds.reduce((s,d)=>s+cuotaMes(d),0);
+ const totC=sum(ds);
+ const diaV=c.diaVencimiento||10;
+ 
+ let h='<a class="back" href="#/">‹ Inicio</a><h1>'+esc(c.nombre)+'</h1>'+
+       '<div class="dashboard-grid">'+
+        '<div class="card-dash primary"><p class="lbl">Este mes (Vence el '+diaV+')</p><p class="big-dash">'+fmt(mesC)+'</p></div>'+
+        '<div class="card-dash"><p class="lbl">Total cuenta</p><p class="big-dash">'+fmt(totC)+'</p></div>'+
+       '</div>';
  h+=ds.length?'<div class="list">'+ds.map(d=>{const q=d.cuotas-d.pagadas;
-  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+fmt(resta(d))+'</span></span><small>'+(q>0?'Quedan '+q+' de '+d.cuotas+' cuotas de '+fmt(cuota(d)):'Pagada completa')+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta todavía no tiene deudas.</p>';
+  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+fmt(resta(d))+'</span></span><small>'+(q>0?'Cuota '+(d.pagadas+1)+' de '+d.cuotas+' ('+fmt(cuota(d))+') · Faltan '+q:'Pagada completa')+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta todavía no tiene deudas.</p>';
  h+='<p class="foot"><button class="link danger" data-act="borrarC" data-id="'+id+'">Eliminar cuenta</button></p>';
- return h+'<a class="btn fab" href="#/c/'+id+'/nueva">'+(c.tipo==='tarjeta'?'Agregar compra':'Agregar deuda')+'</a>'}
+ return h+'<a class="btn fab" href="#/c/'+id+'/nueva">'+(c.tipo==='tarjeta'?'Agregar compra':'Agregar deuda')+'</a>';
+}
 
-function vDeuda(id){const d=db.deudas.find(x=>x.id===id);if(!d)return vHome();const q=d.cuotas-d.pagadas;
+function vDeuda(id){
+ const d=db.deudas.find(x=>x.id===id);if(!d)return vHome();
+ const q=d.cuotas-d.pagadas;
  const row=(a,b,cl)=>'<div class="between '+(cl||'')+'"><span>'+a+'</span><b>'+b+'</b></div>';
- let h='<a class="back" href="#/c/'+d.cuentaId+'">‹ Volver</a><h1>'+esc(d.desc)+'</h1><p class="lbl">Te falta pagar</p><p class="big">'+fmt(resta(d))+'</p>'+ticks(d);
- h+='<p class="sub">'+(q>0?'Quedan '+q+' cuotas de '+fmt(cuota(d)):'Ya la pagaste completa')+'</p>';
- h+='<div class="list pad">'+row('Cuotas pagadas',d.pagadas+' de '+d.cuotas)+row('Valor de la cuota',fmt(cuota(d)))+row('Total a pagar',fmt(d.total));
+ let h='<a class="back" href="#/c/'+d.cuentaId+'">‹ Volver</a><h1>'+esc(d.desc)+'</h1><p class="lbl">Te falta pagar en total</p><p class="big" style="font:600 36px/1.1 ui-serif,Georgia,serif;margin:0 0 6px">'+fmt(resta(d))+'</p>'+ticks(d);
+ h+='<p class="sub">'+(q>0?'Próxima a pagar: Cuota '+(d.pagadas+1)+' de '+d.cuotas+' ('+fmt(cuota(d))+')':'Ya la pagaste completa')+'</p>';
+ h+='<div class="list pad">'+row('Cuotas pagadas',d.pagadas+' de '+d.cuotas)+row('Valor de la cuota',fmt(cuota(d)))+row('Total general',fmt(d.total));
  if(d.recibido){const i=d.total-d.recibido;h+=row('Recibiste',fmt(d.recibido))+row('Interés',fmt(i)+' ('+Math.round(i/d.recibido*100)+'%)','int')}
  h+='</div><div class="acts"><button class="btn" data-act="pagar" data-id="'+id+'"'+(q<1?' disabled':'')+'>Pagué una cuota</button><button class="btn alt" data-act="deshacer" data-id="'+id+'"'+(d.pagadas<1?' disabled':'')+'>Deshacer la última</button></div>';
- return h+'<p class="foot"><a class="link" href="#/d/'+id+'/editar">Editar</a><button class="link danger" data-act="borrarD" data-id="'+id+'">Eliminar</button></p>'}
+ return h+'<p class="foot"><a class="link" href="#/d/'+id+'/editar">Editar</a><button class="link danger" data-act="borrarD" data-id="'+id+'">Eliminar</button></p>';
+}
 
 const fld=(l,n,v,m)=>'<label>'+l+'<input name="'+n+'" value="'+esc(v==null?'':v)+'" inputmode="'+(m||'text')+'" autocomplete="off"></label>';
 function campos(d){const ci=!!(d&&d.recibido);
- return '<label class="chk"><input type="checkbox" name="int"'+(ci?' checked':'')+'> Tiene interés</label><div class="si"'+(ci?'':' hidden')+'>'+fld('Lo que recibiste','recibido',d&&d.recibido,'decimal')+'</div>'+fld('Total a pagar (con el interés, si tiene)','total',d&&d.total,'decimal')+fld('Cantidad de cuotas','cuotas',d&&d.cuotas,'numeric')+fld('Cuotas ya pagadas','pagadas',d?d.pagadas:0,'numeric')}
+ return '<label class="chk"><input type="checkbox" name="int"'+(ci?' checkedتاز':'checked')+' '+(ci?'checked':'')+'> Tiene interés</label><div class="si"'+(ci?'':' hidden')+'>'+fld('Lo que recibiste','recibido',d&&d.recibido,'decimal')+'</div>'+fld('Total a pagar (con el interés, si tiene)','total',d&&d.total,'decimal')+fld('Cantidad de cuotas','cuotas',d&&d.cuotas,'numeric')+fld('Cuotas ya pagadas','pagadas',d?d.pagadas:0,'numeric')}
 function fDeuda(d,cid){
- return '<a class="back" href="'+(d?'#/d/'+d.id:'#/c/'+cid)+'">‹ Cancelar</a><h1>'+(d?'Editar deuda':'Nueva deuda')+'</h1><form data-f="deuda" data-id="'+(d?d.id:'')+'" data-cid="'+(cid||'')+'">'+fld('Qué es (ej. Heladera)','desc',d&&d.desc)+campos(d)+'<button class="btn">Guardar</button></form>'}
+ return '<a class="back" href="'+(d?'#/d/'+d.id:'#/c/'+cid)+'">‹ Cancelar</a><h1>'+(d?'Editar deuda':'Nueva deuda')+'</h1><form data-f="deuda" data-id="'+(d?d.id:'')+'" data-cid="'+(cid||'')+'">'+fld('Qué es (ej. Heladera)','desc',d&&d.desc)+campos(d)+'<button class="btn">Guardar</button></form>';
+}
 function fCuenta(){
- return '<a class="back" href="#/">‹ Cancelar</a><h1>Nueva cuenta</h1><form data-f="cuenta">'+fld('Nombre (ej. Naranja)','nombre','')+'<label>Tipo<select name="tipo"><option value="tarjeta">Tarjeta de crédito</option><option value="prestamo">Préstamo</option><option value="otro">Otra deuda</option></select></label><div class="solo" hidden>'+campos(null)+'</div><button class="btn">Guardar</button></form>'}
+ return '<a class="back" href="#/">‹ Cancelar</a><h1>Nueva cuenta</h1><form data-f="cuenta">'+
+        fld('Nombre (ej. Naranja)','nombre','')+
+        fld('Día de vencimiento (ej. 10)','diaVencimiento','10','numeric')+
+        '<label>Tipo<select name="tipo"><option value="tarjeta">Tarjeta de crédito</option><option value="prestamo">Préstamo</option><option value="otro">Otra deuda</option></select></label>'+
+        '<div class="solo" hidden>'+campos(null)+'</div><button class="btn">Guardar</button></form>';
+}
 
 function render(keep){
  const r=location.hash.slice(2).split('/');let h;
@@ -114,9 +186,11 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target,v=Obj
  const leer=()=>{const total=nn(v.total),cuotas=parseInt(v.cuotas,10),pagadas=parseInt(v.pagadas||0,10),rec=v.int?nn(v.recibido):null;
   if(!(total>0)||!(cuotas>=1)||cuotas>120||!(pagadas>=0)||pagadas>cuotas||(v.int&&!(rec>0))){alert('Revisá los números: monto, cuotas (hasta 120) y cuotas pagadas.');return null}
   return{total,cuotas,pagadas,recibido:rec}};
- if(k==='cuenta'){const n=(v.nombre||'').trim();if(!n){alert('Poné un nombre.');return}
+ if(k==='cuenta'){
+  const n=(v.nombre||'').trim();if(!n){alert('Poné un nombre.');return}
+  const diaV=parseInt(v.diaVencimiento,10)||10;
   let d=null;if(v.tipo!=='tarjeta'){d=leer();if(!d)return}
-  const c={id:uid(),tipo:v.tipo,nombre:n};db.cuentas.push(c);if(d)db.deudas.push({id:uid(),cuentaId:c.id,desc:n,...d});save();location.hash='#/c/'+c.id}
+  const c={id:uid(),tipo:v.tipo,nombre:n,diaVencimiento:diaV};db.cuentas.push(c);if(d)db.deudas.push({id:uid(),cuentaId:c.id,desc:n,...d});save();location.hash='#/c/'+c.id}
  else{const s=(v.desc||'').trim();if(!s){alert('Poné qué es.');return}const d=leer();if(!d)return;
   if(f.dataset.id){Object.assign(db.deudas.find(x=>x.id===f.dataset.id),{desc:s,...d});save();location.hash='#/d/'+f.dataset.id}
   else{db.deudas.push({id:uid(),cuentaId:f.dataset.cid,desc:s,...d});save();location.hash='#/c/'+f.dataset.cid}}
