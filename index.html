@@ -83,7 +83,6 @@ const infoFechas=(d,c)=>{
  const dia=c?.diaVencimiento||10;
  const now=new Date();let y=now.getFullYear(),m=now.getMonth();
  if(now.getDate()>dia)m++;
- m+=d.pagadas;
  const nextD=new Date(y,m,dia).toLocaleDateString('es-AR',{month:'short',year:'numeric'});
  const lastD=new Date(y,m+q-1,dia).toLocaleDateString('es-AR',{month:'short',year:'numeric'});
  return `Quedan ${q} · Próxima: el ${dia} (${nextD}) · Fin: ${lastD}`;
@@ -99,7 +98,7 @@ function vHome(){
           '<div><small style="color:var(--mute);font-size:12px">Este mes</small><div style="font-weight:700">'+fmt(ds.reduce((s,d)=>s+cuotaMes(d),0))+'</div></div>'+
           '<div style="text-align:right"><small style="color:var(--mute);font-size:12px">Total</small><div class="amt">'+fmt(sum(ds))+'</div></div></div></a>'}).join('')+'</div>'}
  if(db.cuentas.length)h+='<p class="foot"><button class="link" data-act="exportar">Guardar respaldo</button><button class="link" data-act="importar">Restaurar respaldo</button></p>';
- h+='<p class="version">Versión 1.9</p>';
+ h+='<p class="version">Versión 2.0</p>';
  return h+'<a class="btn fab" href="#/nueva">Nueva cuenta</a>';
 }
 
@@ -109,7 +108,9 @@ function vCuenta(id){const c=db.cuentas.find(x=>x.id===id);if(!c)return vHome();
   h+='<div style="margin-bottom:14px"><button class="btn" data-act="pagarResumen" data-id="'+id+'">✓ Pagar resumen completo (Vence el '+(c.diaVencimiento||10)+')</button></div>';
  }
  h+=ds.length?'<div class="list">'+ds.map(d=>{
-  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+fmt(resta(d))+'</span></span><small>'+infoFechas(d,c)+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta no tiene deudas.</p>';
+  const q=d.cuotas-d.pagadas;
+  const montoMostrar=q>0?fmt(cuota(d)):'Pagada';
+  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+montoMostrar+'</span></span><small>'+infoFechas(d,c)+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta no tiene deudas.</p>';
  h+='<p class="foot"><button class="link danger" data-act="borrarC" data-id="'+id+'">Eliminar cuenta</button></p>';
  return h+'<a class="btn fab" href="#/c/'+id+'/nueva">'+(c.tipo==='tarjeta'?'Agregar compra':'Agregar deuda')+'</a>'}
 
