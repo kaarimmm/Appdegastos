@@ -35,7 +35,7 @@ h2{font-size:16px;color:var(--mute);font-weight:600;margin:26px 0 8px}
 .ticks{display:flex;gap:3px;margin:10px 0 2px}
 .ticks i{flex:1;height:9px;border-radius:2px;background:var(--tick)}
 .ticks i.on{background:var(--ok)}
-.btn{font:inherit;font-weight:600;border:0;border-radius:12px;padding:14px 16px;background:var(--ink);color:var(--bg);cursor:pointer}
+.btn{font:inherit;font-weight:600;border:0;border-radius:12px;padding:14px 16px;background:var(--ink);color:var(--bg);cursor:pointer;width:100%;text-align:center}
 .btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
 .btn:disabled{opacity:.4}
 .acts{display:grid;gap:10px;margin-top:16px}
@@ -47,7 +47,6 @@ label{display:block;margin-top:14px;font-size:15px;color:var(--mute)}
 input,select{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:12px;font:inherit;font-size:17px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px}
 .chk{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .chk input{width:auto;margin:0}
-form .btn{width:100%;margin-top:22px}
 :focus-visible{outline:3px solid var(--ok);outline-offset:2px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .dash{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 16px}
@@ -73,6 +72,17 @@ const cuotaMes=d=>d.pagadas<d.cuotas?cuota(d):0, sumaMes=a=>a.reduce((s,d)=>s+cu
 const TIPOS={tarjeta:'Tarjetas',prestamo:'Préstamos',otro:'Otras deudas'};
 const ticks=d=>'<div class="ticks" aria-hidden="true">'+Array.from({length:d.cuotas},(_,i)=>'<i class="'+(i<d.pagadas?'on':'')+'"></i>').join('')+'</div>';
 
+// Cálculo inteligente basado en la fecha del celular
+const infoFechas=(d,c)=>{
+ const q=d.cuotas-d.pagadas;if(q<=0)return 'Pagada completa';
+ const dia=d.diaVencimiento||c?.diaVencimiento||10;
+ const now=new Date();let y=now.getFullYear(),m=now.getMonth();
+ if(now.getDate()>dia)m++;
+ const nextD=new Date(y,m,dia).toLocaleDateString('es-AR',{month:'short',year:'numeric'});
+ const lastD=new Date(y,m+q-1,dia).toLocaleDateString('es-AR',{month:'short',year:'numeric'});
+ return `Quedan ${q} · Próxima: el ${dia} (${nextD}) · Fin: ${lastD}`;
+};
+
 function vHome(){
  let h='<div class="dash"><div class="card-d pri"><p class="lbl">Este mes pagás</p><p class="big-d">'+fmt(sumaMes(db.deudas))+'</p></div><div class="card-d"><p class="lbl">Total acumulado</p><p class="big-d">'+fmt(sum(db.deudas))+'</p></div></div>';
  if(!db.cuentas.length)h+='<p class="empty">Todavía no cargaste nada. Tocá «Nueva cuenta» para empezar.</p>';
@@ -87,32 +97,35 @@ function vHome(){
 
 function vCuenta(id){const c=db.cuentas.find(x=>x.id===id);if(!c)return vHome();const ds=db.deudas.filter(d=>d.cuentaId===id);
  let h='<a class="back" href="#/">‹ Inicio</a><h1>'+esc(c.nombre)+'</h1><div class="dash"><div class="card-d pri"><p class="lbl">Este mes</p><p class="big-d">'+fmt(ds.reduce((s,d)=>s+cuotaMes(d),0))+'</p></div><div class="card-d"><p class="lbl">Total cuenta</p><p class="big-d">'+fmt(sum(ds))+'</p></div></div>';
- h+=ds.length?'<div class="list">'+ds.map(d=>{const q=d.cuotas-d.pagadas;
-  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+fmt(resta(d))+'</span></span><small>'+(q>0?'Cuota '+(d.pagadas+1)+' de '+d.cuotas+' ('+fmt(cuota(d))+') · Vence el '+(d.diaVencimiento||c.diaVencimiento||10):'Pagada completa')+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta no tiene deudas.</p>';
+ if(ds.some(d=>d.pagadas<d.cuotas)){
+  h+='<div style="margin-bottom:14px"><button class="btn" data-act="pagarResumen" data-id="'+id+'">✓ Pagar resumen completo (todas las cuotas del mes)</button></div>';
+ }
+ h+=ds.length?'<div class="list">'+ds.map(d=>{
+  return '<a class="item col" href="#/d/'+d.id+'"><span class="between"><b>'+esc(d.desc)+'</b><span class="amt">'+fmt(resta(d))+'</span></span><small>'+infoFechas(d,c)+'</small>'+ticks(d)+'</a>'}).join('')+'</div>':'<p class="empty">Esta cuenta no tiene deudas.</p>';
  h+='<p class="foot"><button class="link danger" data-act="borrarC" data-id="'+id+'">Eliminar cuenta</button></p>';
  return h+'<a class="btn fab" href="#/c/'+id+'/nueva">'+(c.tipo==='tarjeta'?'Agregar compra':'Agregar deuda')+'</a>'}
 
-function vDeuda(id){const d=db.deudas.find(x=>x.id===id);if(!d)return vHome();const q=d.cuotas-d.pagadas;
+function vDeuda(id){const d=db.deudas.find(x=>x.id===id);if(!d)return vHome();const c=db.cuentas.find(x=>x.id===d.cuentaId);const q=d.cuotas-d.pagadas;
  const row=(a,b,cl)=>'<div class="between '+(cl||'')+'"><span>'+a+'</span><b>'+b+'</b></div>';
  let h='<a class="back" href="#/c/'+d.cuentaId+'">‹ Volver</a><h1>'+esc(d.desc)+'</h1><p class="lbl">Te falta pagar</p><p class="big" style="font:600 36px/1.1 ui-serif,Georgia,serif;margin:0 0 6px">'+fmt(resta(d))+'</p>'+ticks(d);
- h+='<p class="sub">'+(q>0?'Próxima cuota: '+(d.pagadas+1)+' de '+d.cuotas+' ('+fmt(cuota(d))+') · Vence el '+(d.diaVencimiento||10):'Pagada completa')+'</p>';
- h+='<div class="list pad">'+row('Cuotas pagadas',d.pagadas+' de '+d.cuotas)+row('Valor cuota',fmt(cuota(d)))+row('Total general',fmt(d.total))+row('Vencimiento', 'Día '+(d.diaVencimiento||10));
+ h+='<p class="sub">'+infoFechas(d,c)+'</p>';
+ h+='<div class="list pad">'+row('Cuotas pagadas',d.pagadas+' de '+d.cuotas)+row('Valor cuota',fmt(cuota(d)))+row('Total general',fmt(d.total))+row('Vencimiento', 'Día '+(d.diaVencimiento||c?.diaVencimiento||10));
  if(d.recibido){const i=d.total-d.recibido;h+=row('Recibiste',fmt(d.recibido))+row('Interés',fmt(i)+' ('+Math.round(i/d.recibido*100)+'%)','int')}
  h+='</div><div class="acts"><button class="btn" data-act="pagar" data-id="'+id+'"'+(q<1?' disabled':'')+'>Pagué una cuota</button><button class="btn alt" data-act="deshacer" data-id="'+id+'"'+(d.pagadas<1?' disabled':'')+'>Deshacer última</button></div>';
  return h+'<p class="foot"><a class="link" href="#/d/'+id+'/editar">Editar</a><button class="link danger" data-act="borrarD" data-id="'+id+'">Eliminar</button></p>';}
 
 const fld=(l,n,v,m)=>'<label>'+l+'<input name="'+n+'" value="'+esc(v==null?'':v)+'" inputmode="'+(m||'text')+'" autocomplete="off"></label>';
-function campos(d){const ci=!!(d&&d.recibido);
+function campos(d,cGen){const ci=!!(d&&d.recibido);
  return '<label class="chk"><input type="checkbox" name="int"'+(ci?' checked':'')+'> Tiene interés</label><div class="si"'+(ci?'':' hidden')+'>'+fld('Lo que recibiste','recibido',d&&d.recibido,'decimal')+'</div>'+
         fld('Total a pagar ($)','total',d&&d.total,'decimal')+
         '<div class="grid2">'+fld('Cantidad cuotas','cuotas',d&&d.cuotas,'numeric')+fld('Pagadas','pagadas',d?d.pagadas:0,'numeric')+'</div>'+
-        fld('📅 Día de vencimiento (1 al 31)','diaVencimiento',d&&d.diaVencimiento||10,'numeric')}
-function fDeuda(d,cid){
- return '<a class="back" href="'+(d?'#/d/'+d.id:'#/c/'+cid)+'">‹ Cancelar</a><h1>'+(d?'Editar deuda':'Nueva deuda')+'</h1><form data-f="deuda" data-id="'+(d?d.id:'')+'" data-cid="'+(cid||'')+'">'+fld('Qué es (ej. Heladera)','desc',d&&d.desc)+campos(d)+'<button class="btn">Guardar</button></form>'}
+        fld('📅 Día de vencimiento (1 al 31)','diaVencimiento',d?d.diaVencimiento:(cGen||10),'numeric')}
+function fDeuda(d,cid){const c=db.cuentas.find(x=>x.id===cid);
+ return '<a class="back" href="'+(d?'#/d/'+d.id:'#/c/'+cid)+'">‹ Cancelar</a><h1>'+(d?'Editar deuda':'Nueva deuda')+'</h1><form data-f="deuda" data-id="'+(d?d.id:'')+'" data-cid="'+(cid||'')+'">'+fld('Qué es (ej. Heladera)','desc',d&&d.desc)+campos(d,c?.diaVencimiento)+'<button class="btn" style="margin-top:22px">Guardar</button></form>'}
 function fCuenta(){
  return '<a class="back" href="#/">‹ Cancelar</a><h1>Nueva cuenta</h1><form data-f="cuenta">'+fld('Nombre (ej. Naranja)','nombre','')+fld('📅 Día de vencimiento general (1 al 31)','diaVencimiento','10','numeric')+
         '<label>Tipo<select name="tipo"><option value="tarjeta">Tarjeta de crédito</option><option value="prestamo">Préstamo</option><option value="otro">Otra deuda</option></select></label>'+
-        '<div class="solo" hidden>'+campos(null)+'</div><button class="btn">Guardar</button></form>'}
+        '<div class="solo" hidden>'+campos(null,10)+'</div><button class="btn" style="margin-top:22px">Guardar</button></form>'}
 
 function render(keep){
  const r=location.hash.slice(2).split('/');let h;
@@ -155,6 +168,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(
  const a=b.dataset.act,id=b.dataset.id,d=db.deudas.find(x=>x.id===id);
  if(a==='pagar'&&d&&d.pagadas<d.cuotas){d.pagadas++;save();render(true)}
  else if(a==='deshacer'&&d&&d.pagadas>0){d.pagadas--;save();render(true)}
+ else if(a==='pagarResumen'){db.deudas.filter(x=>x.cuentaId===id&&x.pagadas<x.cuotas).forEach(x=>x.pagadas++);save();render(true)}
  else if(a==='borrarD'&&d&&confirm('¿Eliminar deuda?')){db.deudas=db.deudas.filter(x=>x!==d);save();location.hash='#/c/'+d.cuentaId}
  else if(a==='borrarC'&&confirm('¿Eliminar cuenta?')){db.cuentas=db.cuentas.filter(c=>c.id!==id);db.deudas=db.deudas.filter(x=>x.cuentaId!==id);save();location.hash='#/'}
  else if(a==='exportar')exportar();else if(a==='importar')importar()});
