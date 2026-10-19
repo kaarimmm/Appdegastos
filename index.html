@@ -56,6 +56,7 @@ input,select{display:block;width:100%;box-sizing:border-box;margin-top:6px;paddi
 .cards{display:grid;gap:12px;margin-top:12px}
 .acct{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;display:block;color:inherit;text-decoration:none}
 .badge{font-size:12px;background:var(--bg);padding:3px 8px;border-radius:6px;color:var(--mute);font-weight:600}
+.version{text-align:center;color:var(--mute);font-size:13px;margin-top:30px}
 </style></head>
 <body><main id="app"></main>
 <script>
@@ -72,10 +73,9 @@ const cuotaMes=d=>d.pagadas<d.cuotas?cuota(d):0, sumaMes=a=>a.reduce((s,d)=>s+cu
 const TIPOS={tarjeta:'Tarjetas',prestamo:'Préstamos',otro:'Otras deudas'};
 const ticks=d=>'<div class="ticks" aria-hidden="true">'+Array.from({length:d.cuotas},(_,i)=>'<i class="'+(i<d.pagadas?'on':'')+'"></i>').join('')+'</div>';
 
-const getMesKey=(dia)=>{
- const now=new Date();let y=now.getFullYear(),m=now.getMonth();
- if(now.getDate()>dia)m++;
- return y+'-'+String(m+1).padStart(2,'0');
+const getMesKey=()=> {
+ const now=new Date();
+ return now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
 };
 
 const infoFechas=(d,c)=>{
@@ -99,7 +99,9 @@ function vHome(){
           '<div><small style="color:var(--mute);font-size:12px">Este mes</small><div style="font-weight:700">'+fmt(ds.reduce((s,d)=>s+cuotaMes(d),0))+'</div></div>'+
           '<div style="text-align:right"><small style="color:var(--mute);font-size:12px">Total</small><div class="amt">'+fmt(sum(ds))+'</div></div></div></a>'}).join('')+'</div>'}
  if(db.cuentas.length)h+='<p class="foot"><button class="link" data-act="exportar">Guardar respaldo</button><button class="link" data-act="importar">Restaurar respaldo</button></p>';
- return h+'<a class="btn fab" href="#/nueva">Nueva cuenta</a>'}
+ h+='<p class="version">Versión 1.9</p>';
+ return h+'<a class="btn fab" href="#/nueva">Nueva cuenta</a>';
+}
 
 function vCuenta(id){const c=db.cuentas.find(x=>x.id===id);if(!c)return vHome();const ds=db.deudas.filter(d=>d.cuentaId===id);
  let h='<a class="back" href="#/">‹ Inicio</a><h1>'+esc(c.nombre)+'</h1><div class="dash"><div class="card-d pri"><p class="lbl">Este mes</p><p class="big-d">'+fmt(ds.reduce((s,d)=>s+cuotaMes(d),0))+'</p></div><div class="card-d"><p class="lbl">Total cuenta</p><p class="big-d">'+fmt(sum(ds))+'</p></div></div>';
@@ -117,7 +119,7 @@ function vDeuda(id){const d=db.deudas.find(x=>x.id===id);if(!d)return vHome();co
  h+='<p class="sub">'+infoFechas(d,c)+'</p>';
  h+='<div class="list pad">'+row('Cuotas pagadas',d.pagadas+' de '+d.cuotas)+row('Valor cuota',fmt(cuota(d)))+row('Total general',fmt(d.total))+row('Vencimiento', 'Día '+(c?.diaVencimiento||10));
  if(d.recibido){const i=d.total-d.recibido;h+=row('Recibiste',fmt(d.recibido))+row('Interés',fmt(i)+' ('+Math.round(i/d.recibido*100)+'%)','int')}
- h+='</div><div class="acts"><button class="btn" data-act="pagar" data-id="'+id+'"'+(q<1?' disabled':'')+'>Pagué una cuota</button><button class="btn alt" data-act="deshacer" data-id="'+id+'"'+(d.pagadas<=(d.basePagadas||0)?' disabled title="No se puede deshacer por debajo de las cuotas iniciales cargadas"':"")+'>Deshacer última</button></div>';
+ h+='</div><div class="acts"><button class="btn" data-act="pagar" data-id="'+id+'"'+(q<1?' disabled':'')+'>Pagué una cuota</button></div>';
  return h+'<p class="foot"><a class="link" href="#/d/'+id+'/editar">Editar</a><button class="link danger" data-act="borrarD" data-id="'+id+'">Eliminar</button></p>';}
 
 const fld=(l,n,v,m)=>'<label>'+l+'<input name="'+n+'" value="'+esc(v==null?'':v)+'" inputmode="'+(m||'text')+'" autocomplete="off"></label>';
@@ -150,15 +152,13 @@ document.addEventListener('submit',e=>{e.preventDefault();const f=e.target,v=Obj
   if(!(cuotas>=1&&cuotas<=120)){alert('La cantidad de cuotas debe ser entre 1 y 120.');return null}
   if(!(pagadas>=0&&pagadas<=cuotas)){alert('Las cuotas pagadas no pueden superar al total de cuotas.');return null}
   if(v.int&&!(rec>0)){alert('Revisá el monto recibido.');return null}
-  return{total,cuotas,pagadas,basePagadas:pagadas,recibido:rec}};
+  return{total,cuotas,pagadas,recibido:rec}};
  if(k==='cuenta'){const n=(v.nombre||'').trim();if(!n){alert('Poné un nombre.');return}const diaV=parseInt(v.diaVencimiento,10)||10;
   if(!(diaV>=1&&diaV<=31)){alert('El día de vencimiento debe estar entre 1 y 31.');return}
   let d=null;if(v.tipo!=='tarjeta'){d=leer();if(!d)return}
   const c={id:uid(),tipo:v.tipo,nombre:n,diaVencimiento:diaV};db.cuentas.push(c);if(d)db.deudas.push({id:uid(),cuentaId:c.id,desc:n,...d});save();location.hash='#/c/'+c.id}
  else{const s=(v.desc||'').trim();if(!s){alert('Poné qué es.');return}const d=leer();if(!d)return;
-  if(f.dataset.id){const old=db.deudas.find(x=>x.id===f.dataset.id);
-   Object.assign(old,{desc:s,...d,basePagadas:Math.min(d.pagadas, old.basePagadas??d.pagadas)});
-   save();location.hash='#/d/'+f.dataset.id}
+  if(f.dataset.id){Object.assign(db.deudas.find(x=>x.id===f.dataset.id),{desc:s,...d});save();location.hash='#/d/'+f.dataset.id}
   else{db.deudas.push({id:uid(),cuentaId:f.dataset.cid,desc:s,...d});save();location.hash='#/c/'+f.dataset.cid}}
 });
 document.addEventListener('change',e=>{const t=e.target;
@@ -173,25 +173,24 @@ function importar(){const t=prompt('Pegá acá el respaldo:');if(!t)return;
 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;
  const a=b.dataset.act,id=b.dataset.id,d=db.deudas.find(x=>x.id===id);
- const c=a==='pagarResumen'?db.cuentas.find(x=>x.id===id):null;
+ const currentMes=getMesKey();
 
  if(a==='pagar'&&d&&d.pagadas<d.cuotas){
-  const mesKey=getMesKey(c?.diaVencimiento);
-  if(d.ultimoPago===mesKey){if(!confirm('Esta compra ya tiene un pago registrado en este período. ¿Querés pagar otra cuota igual?'))return;}
+  if(d.ultimoPagoMes===currentMes){
+   alert('Esta cuota ya fue registrada como pagada en este mes. El próximo pago estará disponible el mes que viene.');
+   return;
+  }
   if(confirm('¿Confirmar el pago de 1 cuota para «'+d.desc+'»?')){
-   d.pagadas++; d.ultimoPago=mesKey; save(); render(true);
+   d.pagadas++; d.ultimoPagoMes=currentMes; save(); render(true);
   }
  }
- else if(a==='deshacer'&&d&&d.pagadas>(d.basePagadas||0)){
-  d.pagadas--; d.ultimoPago=null; save(); render(true);
- }
- else if(a==='pagarResumen'&&c){
-  const pend=db.deudas.filter(x=>x.cuentaId===id&&x.pagadas<x.cuotas);
-  if(!pend.length){alert('No hay deudas pendientes en esta cuenta.');return;}
-  if(confirm('¿Confirmás el pago del resumen de «'+c.nombre+'»?\nSe registrará 1 cuota pagada para todas las compras activas.')){
-   const mesKey=getMesKey(c.diaVencimiento);
+ else if(a==='pagarResumen'){
+  const c=db.cuentas.find(x=>x.id===id);
+  const pend=db.deudas.filter(x=>x.cuentaId===id&&x.pagadas<x.cuotas&&x.ultimoPagoMes!==currentMes);
+  if(!pend.length){alert('Todas las deudas de esta cuenta ya tienen su cuota registrada como pagada en este mes.');return;}
+  if(confirm('¿Confirmás el pago del resumen de «'+c.nombre+'» para este mes?')){
    pend.forEach(x=>{
-    if(x.ultimoPago!==mesKey){x.pagadas++; x.ultimoPago=mesKey;}
+    x.pagadas++; x.ultimoPagoMes=currentMes;
    });
    save(); render(true);
   }
